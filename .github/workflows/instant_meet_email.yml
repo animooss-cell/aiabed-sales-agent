@@ -1,0 +1,69 @@
+name: Instant Google Meet Email Dispatcher
+
+on:
+  workflow_dispatch:
+    inputs:
+      customer_name:
+        description: 'Customer Name'
+        required: true
+        default: 'مشتری گرامی'
+      customer_email:
+        description: 'Customer Email'
+        required: true
+      meeting_time:
+        description: 'Meeting Time'
+        required: false
+        default: 'یکشنبه ۹ آذر ساعت ۱۷:۰۰'
+      meet_link:
+        description: 'Google Meet Link'
+        required: false
+        default: 'https://meet.google.com/abed-ai-session'
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Send Instant Google Meet Email
+        env:
+          GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          CUSTOMER_NAME: ${{ github.event.inputs.customer_name }}
+          CUSTOMER_EMAIL: ${{ github.event.inputs.customer_email }}
+          MEETING_TIME: ${{ github.event.inputs.meeting_time }}
+          MEET_LINK: ${{ github.event.inputs.meet_link }}
+        run: |
+          python -c "
+          import os, smtplib
+          from email.mime.multipart import MIMEMultipart
+          from email.mime.text import MIMEText
+          from google_meet_mailer import generate_meet_html
+
+          sender = os.environ['GMAIL_SENDER']
+          pwd = os.environ['GMAIL_APP_PASSWORD']
+          to_email = os.environ['CUSTOMER_EMAIL']
+          name = os.environ.get('CUSTOMER_NAME', 'مشتری گرامی')
+          mtime = os.environ.get('MEETING_TIME', 'یکشنبه ۹ آذر ساعت ۱۷:۰۰')
+          link = os.environ.get('MEET_LINK', 'https://meet.google.com/abed-ai-session')
+
+          print(f'Sending email to {to_email} for {name}...')
+          msg = MIMEMultipart('alternative')
+          msg['Subject'] = f'دعوت‌نامه جلسه آنلاین Google Meet | مهندس عبدالله احمدیان ({name})'
+          msg['From'] = f'عبدالله احمدیان <{sender}>'
+          msg['To'] = to_email
+
+          html = generate_meet_html(name, mtime, link)
+          msg.attach(MIMEText(html, 'html', 'utf-8'))
+
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+              server.login(sender, pwd)
+              server.sendmail(sender, [to_email], msg.as_string())
+          print('EMAIL SENT SUCCESSFULLY FROM GMAIL!')
+          "
